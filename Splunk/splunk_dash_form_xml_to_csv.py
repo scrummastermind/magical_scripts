@@ -64,9 +64,9 @@ def main():
               if title==''  and panel.find(panel_type_tag)!=None and panel.find(panel_type_tag).find('title')!=None:
                 title = panel.find(panel_type_tag).find('title').text
 
-                if type(query)=='str':
-                  query = re.sub(r"\s+\|\s+", "\n| ", query)
-              
+              query = str(query)
+              query = re.sub(r"\s*\|\s*", "\n| ", query)
+            
               row['Source File'] = src_file
               row['Dashboard Name'] = dash_name
               row['Panel Type'] = panel_type_tag.capitalize()
