@@ -12,7 +12,7 @@ def camel_case_split(identifier):
     return " ".join([m.group(0).capitalize() for m in matches])
 
 def rex_to_parse_regex(query):
-    return re.sub(r'\|\s*rex\s+(field\s*=\S+)?\s+(.*)', r'| parse regex \1 "\2"', query)
+    return re.sub(r'\|\s*rex\s+(field\s*=\S+)?\s+(.*)', r'| parse regex \1 "\2" nodrop', query)
 
 def replace_headers(query, old, new):
     return query.replace(old, new)
@@ -75,6 +75,9 @@ def main():
               query = str(query)
               splunk_query = re.sub(r"\s*\|\s*", "\n| ", query)
               sumo_query = rex_to_parse_regex(splunk_query)
+              sumo_query = replace_headers(sumo_query, 'index=$environment$ host="mue*" source="/opt/notification/logs/stats.log"', '_sourcecategory=npe/*/ncs/spoc/stats_log _sourceName=/opt/*/logs/stats.log _sourceHost=mu*')
+              sumo_query = replace_headers(sumo_query, 'index=$environment$ host="mue*" source="/opt/spoc/logs/stats.log"', '_sourcecategory=npe/*/ncs/spoc/stats_log _sourceName=/opt/*/logs/stats.log _sourceHost=mu*')
+ 
            
               row['Source File'] = src_file
               row['Dashboard Name'] = dash_name
