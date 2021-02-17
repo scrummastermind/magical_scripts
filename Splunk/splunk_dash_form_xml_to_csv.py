@@ -2,12 +2,12 @@ import sys
 import os
 import re
 import subprocess
-import pandas as pd
+import csv
 import xml.etree.ElementTree as ET
 from pprint import pprint
 
 def main():
-  d = []
+  csv_rows = []
   for root, dirs, files in os.walk("."):
       for file in files:
           src_file = (os.path.join(root, file))
@@ -70,10 +70,14 @@ def main():
               row['Search Type'] = search_type
               row['Query'] = query
 
-              d.append(row)
-  df = pd.DataFrame(d)
-  df.to_csv('results.csv')
-  subprocess.check_output(['open', 'results.csv'])
+              csv_rows.append(row)
+  if len(csv_rows) > 0:
+    columns = csv_rows[0].keys()
+    with open('results.csv', 'w', newline='')  as output_file:
+      dict_writer = csv.DictWriter(output_file, columns)
+      dict_writer.writeheader()
+      dict_writer.writerows(csv_rows)
+    subprocess.check_output(['open', 'results.csv'])
 
 if __name__ == "__main__":
     main()
