@@ -6,6 +6,10 @@ import csv
 import xml.etree.ElementTree as ET
 from pprint import pprint
 
+def camel_case_split(identifier):
+    matches = re.finditer('.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)', identifier)
+    return " ".join([m.group(0).capitalize() for m in matches])
+
 def main():
   csv_rows = []
   for root, dirs, files in os.walk("."):
@@ -65,9 +69,9 @@ def main():
               
               row['Source File'] = src_file
               row['Dashboard Name'] = dash_name
-              row['Panel Type'] = panel_type_tag
+              row['Panel Type'] = panel_type_tag.capitalize()
               row['Panel Name'] = title
-              row['Search Type'] = search_type
+              row['Search Type'] = camel_case_split(search_type)
               row['Query'] = query
 
               csv_rows.append(row)
