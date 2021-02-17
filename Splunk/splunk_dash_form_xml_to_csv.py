@@ -6,9 +6,17 @@ import csv
 import xml.etree.ElementTree as ET
 from pprint import pprint
 
+
 def camel_case_split(identifier):
     matches = re.finditer('.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)', identifier)
     return " ".join([m.group(0).capitalize() for m in matches])
+
+def rex_to_parse_regex(query):
+    return re.sub(r'\|\s*rex\s+(field\s*=\S+)?\s+(.*)', r'| parse regex \1 "\2"', query)
+
+def replace_headers(query, old, new):
+    return query.replace(old, new)
+    
 
 def main():
   csv_rows = []
@@ -65,14 +73,16 @@ def main():
                 title = panel.find(panel_type_tag).find('title').text
 
               query = str(query)
-              query = re.sub(r"\s*\|\s*", "\n| ", query)
-            
+              splunk_query = re.sub(r"\s*\|\s*", "\n| ", query)
+              sumo_query = rex_to_parse_regex(splunk_query)
+           
               row['Source File'] = src_file
               row['Dashboard Name'] = dash_name
               row['Panel Type'] = panel_type_tag.capitalize()
               row['Panel Name'] = title
               row['Search Type'] = camel_case_split(search_type)
-              row['Query'] = query
+              row['Splunk Query'] = splunk_query
+              row['Sumo Query'] = sumo_query
 
               csv_rows.append(row)
   if len(csv_rows) > 0:
