@@ -80,9 +80,6 @@ def main():
               query = str(query)
               splunk_query = re.sub(r"\s*\|\s*", "\n| ", query)
               sumo_query = rex_to_parse_regex(splunk_query)
-              sumo_query = replace_headers(sumo_query, 'index=$environment$ host="mue*" source="/opt/notification/logs/stats.log"', '_sourcecategory=npe/*/ncs/spoc/stats_log _sourceName=/opt/*/logs/stats.log _sourceHost=mu*')
-              sumo_query = replace_headers(sumo_query, 'index=$environment$ host="mue*" source="/opt/spoc/logs/stats.log"', '_sourcecategory=npe/*/ncs/spoc/stats_log _sourceName=/opt/*/logs/stats.log _sourceHost=mu*')
-              sumo_query = replace_headers(sumo_query,'index=pt_prod sourcetype=ll_pt_summary','_sourceCategory=*pt/ll_pt_summary | kv "operation", "puc", "prtnuid", "gname", "pnfi", "api"  nodrop')
            
               row['Source File'] = src_file
               row['Dashboard Name'] = dash_name
