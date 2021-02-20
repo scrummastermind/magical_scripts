@@ -85,9 +85,6 @@ def content_item_to_path(source_region, dest_region, base_urls, headers, auths, 
             content_path = requests.get(base_urls[source_region] + 'v2/content/' + str(id) + "/path", headers=headers, auth=auths[source_region])
             content_path_json = json.loads(content_path.text)
             currentPath = content_path_json['path']
-            potential_dest_path = currentPath.replace('@teads.tv', '@teads.com')
-            potential_dest_path = potential_dest_path.replace(
-                'security+sumosupport+teads@sumologic.com', 'security+sumosupport+teads-1@sumologic.com')
             params = {'path': potential_dest_path}
             dest_content_path_response = requests.get(base_urls[dest_region] + 'v2/content/path', headers=headers, auth=auths[dest_region], params=params)
             
