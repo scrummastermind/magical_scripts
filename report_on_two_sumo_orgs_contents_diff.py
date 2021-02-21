@@ -7,15 +7,36 @@ import time
 import subprocess
 import re
 import collections
+from collections import deque
+from queue import LifoQueue
 import os
 
 
-counter = 1
 user_counter = 0
-total_steps = 0
-sub_count = 0
-sub_total_steps = 1
+global_folder_name = ''
+global_folder_id = ''
 num_of_users_source = 0
+sub_count = 0
+folder_sub_count = 0
+folder_sub_total_steps = 0
+folders_names_stack = LifoQueue()
+folders_ids_stack = LifoQueue()
+sub_total_steps = 0
+current_folder_name = None
+current_parent_folder = ''
+
+
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
 
 def printSubProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█', printEnd="\r"):
     """
@@ -34,10 +55,11 @@ def printSubProgressBar(iteration, total, prefix='', suffix='', decimals=1, leng
                                                      (iteration / float(total)))
     filledLength = int(length * iteration // total)
     bar = fill * filledLength + '-' * (length - filledLength)
-    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end=printEnd)
+    print(f'\r{bcolors.OKBLUE}{prefix}{bcolors.ENDC} |{bcolors.OKGREEN}{bar}{bcolors.ENDC}| {bcolors.OKCYAN}{percent}{bcolors.ENDC}% {suffix}', end=printEnd)
     # Print New Line on Complete
     if iteration == total:
         print()
+
 
 def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█', printEnd="\r"):
     """
@@ -56,92 +78,142 @@ def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=
                                                      (iteration / float(total)))
     filledLength = int(length * iteration // total)
     bar = fill * filledLength + '-' * (length - filledLength)
-    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end=printEnd)
+    print(f'\r{bcolors.WARNING}{prefix}{bcolors.ENDC} |{bcolors.OKGREEN}{bar}{bcolors.ENDC}| {bcolors.OKCYAN}{percent}{bcolors.ENDC}% {suffix}', end=printEnd)
     # Print New Line on Complete
     if iteration == total:
         print()
 
 
-def content_item_to_path(source_region, dest_region, base_urls, headers, auths, name, content, loggedin, sub_prefix='', global_folder_name=''):
+def content_item_to_path(source_region, dest_region, base_urls, headers, auths, id, loggedin):
     paths = []
-    global counter
+    details = {}
     global user_counter
-    global total_steps
-    global sub_total_steps
-    global sub_count
+    global global_folder_name
     global num_of_users_source
-    if isinstance(content, dict):
-        if 'id' in content and 'name' in content and 'itemType' in content:
-            id = content['id']
-            name = content['name']
-            itemType = content['itemType']
-            description = 'N/A'
-            if 'description' in content.keys():
-                description = content['description']
-                m = re.search('\((.*)\)', description)
-                if m:
-                    description = m.group(1).strip()
+    global sub_count
+    global folders_ids_stack
+    global sub_total_steps
+    global current_folder_name
+    global folder_sub_count
+    global folder_sub_total_steps
+    global current_parent_folder
+    global global_folder_id 
+    global folders_names_stack 
+    children_response = requests.get(
+        base_urls[source_region] + 'v2/content/folders/' + str(id), headers=headers, auth=auths[source_region])
+    children_contents = json.loads(children_response.text)
+    id = children_contents['id']
+    parentId = children_contents['parentId']
 
-            content_path = requests.get(base_urls[source_region] + 'v2/content/' + str(id) + "/path", headers=headers, auth=auths[source_region])
-            content_path_json = json.loads(content_path.text)
-            currentPath = content_path_json['path']
-            params = {'path': potential_dest_path}
-            dest_content_path_response = requests.get(base_urls[dest_region] + 'v2/content/path', headers=headers, auth=auths[dest_region], params=params)
-            
-            dest_id = 'N/A'
+    name = children_contents['name']
+    itemType = children_contents['itemType']
+    description = children_contents['description']
+    content_children = children_contents['children']
+    children_count = len(content_children)
+    sub_total_steps += children_count
+    
+    if parentId and parentId != '0000000000000000':
+        folders_ids_stack.put(parentId)
+        parent_response = requests.get(
+            base_urls[source_region] + 'v2/content/folders/' + str(parentId), headers=headers, auth=auths[source_region])
+        parent_contents = json.loads(children_response.text)
+        folders_names_stack.put(parent_contents['name'])
+        folder_sub_total_steps += children_count
+    else:
+        folders_ids_stack.put('0000000000000000')
+        folders_names_stack.put('TOP')
+        folder_sub_count = 0
+        folder_sub_total_steps = 0
+    
+    if description:
+        m = re.search('\((.*)\)', description)
+        if m:
+            description = m.group(1).strip()
+    parent_folder_name = folders_names_stack.get()
+    parent_folder_id = folders_ids_stack.get()
+    if children_count==0:
+        sub_prefix = updateProgress(parent_folder_name, name, False)
+        details = processItemPath(base_urls, source_region, id, headers,
+                              auths, loggedin, dest_region, name, itemType, description)
+        paths.append(details)
+    else:
+        for child in content_children:
+            sub_count+=1
+            if parent_folder_name != 'TOP':
+                folder_sub_count += 1
+            id = child['id']
+            name = child['name']
+            itemType = child['itemType']
+            description = ''
+            if itemType == 'Folder':
+                id = child['id']
+                paths = paths + content_item_to_path(source_region, dest_region, base_urls, headers, auths, id, loggedin)
 
-
-            if loggedin:
-                dest_content_status_code = dest_content_path_response.status_code
-                dest_content = json.loads(dest_content_path_response.text)
-                if str(dest_content_status_code) == '200' and 'id' in dest_content.keys():
-                    dest_id = dest_content['id']
-                elif str(dest_content_status_code) == '404' and 'errors' in dest_content.keys():
-                    dest_id = 'Missing'
-                else:
-                    dest_id = 'Othe error'
-            else:
-                dest_id='User never logged in'
-
-            
-            
-            details = {'id': id, 'name': name, 'itemType': itemType,
-                       'path': currentPath, 'email':  description, 'logged-in': loggedin, 'content-id-dest': dest_id}
-            counter += 1
-            os.system('clear')
-            print("Analysing the contents of {} users from the source\n".format(num_of_users_source))
-            sub_prefix = 'User # ' + str(user_counter) + ' - (' + \
-                global_folder_name + ') - '
-            global_prefix = 'Global Progress:'
-            printProgressBar(counter, total_steps, prefix=global_prefix, suffix='Complete\n', length=150)
-            
-            if sub_count == 0:
-                print(sub_prefix + 'No contents found!')
-            else:
-                subPrefix = sub_prefix + \
-                    str(sub_count) + ' contents so far ' + 'Progress:'
-                printSubProgressBar(sub_count, max(1, sub_total_steps), prefix=subPrefix,
-                                    suffix='Complete', length=(150+len(global_prefix))-len(subPrefix))
-
-            sub_count += 1
+            updateProgress(parent_folder_name, name, True)
+            details = processItemPath(base_urls, source_region, id, headers, auths, loggedin, dest_region, name, itemType, description)
             paths.append(details)
-            if itemType == 'Folder' and 'children' in content and len(content['children']) > 0:
-                children_len = len(content['children'])
-                total_steps += children_len
-                sub_total_steps+=children_len
-                for child in content['children']:
-                    if child['itemType'] == 'Folder':
-                        child_response = requests.get(base_urls[source_region] + 'v2/content/folders/' + str(child['id']), headers=headers, auth=auths[source_region])
-                        child = json.loads(child_response.text)
-                    paths=paths + content_item_to_path(source_region, dest_region, base_urls, headers, auths,
-                                                       name, child, loggedin,sub_prefix=sub_prefix, global_folder_name=global_folder_name)
-
-    elif isinstance(content, list):
-        for _ , item in enumerate(content):
-            paths = paths + content_item_to_path(source_region, dest_region, base_urls, headers,
-                                                 auths, name, item, loggedin, sub_prefix=sub_prefix, global_folder_name=global_folder_name)
-
+   
     return paths
+
+
+def updateProgress(parent_name, name, has_sub_contents=False):
+    global user_counter
+    global global_folder_name
+    global num_of_users_source
+    global sub_count
+    global folders_ids_stack
+    global sub_total_steps
+    global current_folder_name
+    global folder_sub_count
+    global folder_sub_total_steps
+    global folders_names_stack 
+
+    sub_prefix = ''
+    os.system('clear')
+    print(
+        f'{bcolors.HEADER}Analysing the contents of {num_of_users_source} users from the source{bcolors.ENDC}\n')
+    sub_prefix = 'User # ' + str(user_counter + 1) + ' - (' + \
+        global_folder_name + ') ' 
+    global_prefix = 'Global Progress:'
+    
+    printProgressBar(user_counter, num_of_users_source,
+                        prefix=global_prefix, suffix='Complete\n\n', length=150)
+
+    if not has_sub_contents:
+        print(sub_prefix +
+              f'{bcolors.FAIL} No contents found!{bcolors.ENDC}\n')
+    else:
+        printSubProgressBar(sub_count, max(1, sub_total_steps), prefix=sub_prefix + 'Progress',
+                            suffix='Complete\n\n', length=(150+len(global_prefix))-len(sub_prefix))
+
+        folder_sub_prefix = 'Folder (' + parent_name + ') '
+        printSubProgressBar(folder_sub_count, max(1, folder_sub_total_steps), prefix=folder_sub_prefix + 'Progress',
+                                suffix='Complete', length=(150+len(global_prefix))-len(folder_sub_prefix))
+    return sub_prefix
+
+def processItemPath(base_urls, source_region, id, headers, auths, loggedin, dest_region, name, itemType, description):
+    content_path = requests.get(base_urls[source_region] + 'v2/content/' + str(id) + "/path", headers=headers, auth=auths[source_region])
+    content_path_json = json.loads(content_path.text)
+    currentPath = content_path_json['path']
+    if loggedin:
+        params = {'path': currentPath}
+        dest_content_path_response = requests.get(base_urls[dest_region] + 'v2/content/path', headers=headers, auth=auths[dest_region], params=params)
+        dest_id = 'N/A'
+
+        dest_content_status_code = dest_content_path_response.status_code
+        dest_content = json.loads(dest_content_path_response.text)
+        if str(dest_content_status_code) == '200' and 'id' in dest_content.keys():
+            dest_id = dest_content['id']
+        elif str(dest_content_status_code) == '404' and 'errors' in dest_content.keys():
+            dest_id = 'Missing'
+        else:
+            dest_id = 'Othe error'
+    else:
+        dest_id='User never logged in'
+
+    details = {'id': id, 'name': name, 'itemType': itemType,
+                'path': currentPath, 'email':  description, 'logged-in': loggedin, 'content-id-dest': dest_id}
+    return details
 
 def get_global_folders(region, base_urls, headers, auths):
 	global_folders_job_response = requests.get(base_urls[region] + 'v2/content/folders/global', headers = headers, auth = auths[region])
@@ -163,43 +235,60 @@ def get_global_folders(region, base_urls, headers, auths):
 
 
 def main():
-    global total_steps
-    global counter
     global user_counter
-    global sub_total_steps
-    global sub_count
+    global global_folder_name
     global num_of_users_source
-    regions = ['DEST', 'SRC']
+    global sub_count
+    global folders_ids_stack
+    global current_folder_name
+    global global_folder_id 
+    global folders_names_stack 
+
+    regions = ['SRC', 'DEST']
     missing_folders_withcontents = []
-    base_urls = {'DEST': 'https://api.eu.sumologic.com/api/', 'SRC': 'https://api.sumologic.com/api/'}
     headers = {'isAdminMode': 'true'}
-    destAccessId = input("Enter DEST Sumo Org Access Id: ")
-    destAccessKey = input("Enter DEST Sumo Org Access Key: ")
-    srcAccessId = input("Enter SRC Sumo Org Access Id: ")
-    srcAccessKey = input("Enter SRC Sumo Org Access Key: ")
-    auths = {'DEST': HTTPBasicAuth(destAccessId, destAccessKey), 'SRC': HTTPBasicAuth(
-        srcAccessId, srcAccessKey)}
+    
+    srcRegion = input("Enter Source Sumo region, i.e AU, CA, DE, EU, FED, IN, JP, US1, US2: ")
+    srcRegion = srcRegion.lower() + '.' if srcRegion in ('AU', 'CA', 'DE', 'EU', 'FED', 'IN', 'JP', 'US2') else ''
+    srcAccessId = input("Enter Source Sumo Org Access Id: ")
+    srcAccessKey = input("Enter Source Sumo Org Access Key: ")
+    
+    destRegion = input("Enter Destination Sumo region, i.e AU, CA, DE, EU, FED, IN, JP, US1, US2: ")
+    destRegion = destRegion.lower() + '.' if destRegion in ('AU', 'CA', 'DE', 'EU', 'FED', 'IN', 'JP', 'US2') else ''
+    destAccessId = input("Enter Destination Sumo Org Access Id: ")
+    destAccessKey = input("Enter Destination Sumo Org Access Key: ")
+
+    srcEndPoint = 'https://api.__REGION__sumologic.com/api/'.replace('__REGION__', srcRegion)
+    destEndPoint = 'https://api.__REGION__sumologic.com/api/'.replace('__REGION__', destRegion)
+
+    print("You have entered:\nSource Org (Region: {}, AccessId:{}) API EndPoint:{})\nDestination Org (Region: {}, AccessId:{}) API EndPoint:{})\n".format(srcRegion,srcAccessId,srcEndPoint, destRegion,destAccessId, destEndPoint))
+    
+    base_urls = {'SRC': srcEndPoint, 'DEST': destEndPoint}
+
+    auths = {'SRC': HTTPBasicAuth(srcAccessId, srcAccessKey), 'DEST': HTTPBasicAuth(destAccessId, destAccessKey)}
+
     global_folders = {}
 
     for region in regions:
         global_folders[region] = collections.OrderedDict(sorted(get_global_folders(region, base_urls, headers, auths).items()))
-
+    
     num_of_users_source=len(global_folders['SRC'].keys())
     total_steps = num_of_users_source
     os.system('clear')
     print("Analysing the contents of {} users from the source\n".format(num_of_users_source))
-    user_counter = 1
-    for global_folders_name in global_folders['SRC'].keys():
+    user_counter = 0
+    for folder_name in global_folders['SRC'].keys():
+        global_folder_name = folder_name
+        sub_total_steps = 0
         sub_count = 0
-        they_logged_in_to_dest = global_folders_name in global_folders['DEST'].keys()
-        us_folder_response = requests.get(base_urls['SRC'] + "v2/content/folders/{}".format(global_folders['SRC'][global_folders_name]), headers = headers, auth = auths['SRC'])
-        us_folder_result = json.loads(us_folder_response.text)
-        sub_total_steps = len(us_folder_result['children'])
-        rows=content_item_to_path('SRC', 'DEST', base_urls, headers, auths, global_folders_name, us_folder_result,
-                                  they_logged_in_to_dest, sub_prefix='', global_folder_name=global_folders_name)
+        loggedin = folder_name in global_folders['DEST'].keys()
+        id = global_folders['SRC'][folder_name]
+        global_folder_id = id
+        rows = content_item_to_path(
+            'SRC', 'DEST', base_urls, headers, auths, id, loggedin)
         missing_folders_withcontents = missing_folders_withcontents + rows
-        counter+=1
         user_counter+=1
+
 
     timestr = time.strftime("%Y%m%d-%H%M%S")
     file_name = "missing_folders_withcontents_{}".format(timestr)
