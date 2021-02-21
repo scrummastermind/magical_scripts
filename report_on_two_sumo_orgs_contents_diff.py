@@ -12,19 +12,11 @@ from queue import LifoQueue
 import os
 
 
+sub_count = 0
+sub_total_steps = 0
 user_counter = 0
 global_folder_name = ''
-global_folder_id = ''
 num_of_users_source = 0
-sub_count = 0
-folder_sub_count = 0
-folder_sub_total_steps = 0
-folders_names_stack = LifoQueue()
-folders_ids_stack = LifoQueue()
-sub_total_steps = 0
-current_folder_name = None
-current_parent_folder = ''
-
 
 class bcolors:
     HEADER = '\033[95m'
@@ -36,29 +28,6 @@ class bcolors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
-
-
-def printSubProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█', printEnd="\r"):
-    """
-    Call in a loop to create terminal progress bar
-    @params:
-        iteration   - Required  : current iteration (Int)
-        total       - Required  : total iterations (Int)
-        prefix      - Optional  : prefix string (Str)
-        suffix      - Optional  : suffix string (Str)
-        decimals    - Optional  : positive number of decimals in percent complete (Int)
-        length      - Optional  : character length of bar (Int)
-        fill        - Optional  : bar fill character (Str)
-        printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
-    """
-    percent = ("{0:." + str(decimals) + "f}").format(100 *
-                                                     (iteration / float(total)))
-    filledLength = int(length * iteration // total)
-    bar = fill * filledLength + '-' * (length - filledLength)
-    print(f'\r{bcolors.OKBLUE}{prefix}{bcolors.ENDC} |{bcolors.OKGREEN}{bar}{bcolors.ENDC}| {bcolors.OKCYAN}{percent}{bcolors.ENDC}% {suffix}', end=printEnd)
-    # Print New Line on Complete
-    if iteration == total:
-        print()
 
 
 def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█', printEnd="\r"):
@@ -91,56 +60,30 @@ def content_item_to_path(source_region, dest_region, base_urls, headers, auths, 
     global global_folder_name
     global num_of_users_source
     global sub_count
-    global folders_ids_stack
     global sub_total_steps
-    global current_folder_name
-    global folder_sub_count
-    global folder_sub_total_steps
-    global current_parent_folder
-    global global_folder_id 
-    global folders_names_stack 
     children_response = requests.get(
         base_urls[source_region] + 'v2/content/folders/' + str(id), headers=headers, auth=auths[source_region])
     children_contents = json.loads(children_response.text)
     id = children_contents['id']
-    parentId = children_contents['parentId']
-
     name = children_contents['name']
     itemType = children_contents['itemType']
     description = children_contents['description']
     content_children = children_contents['children']
     children_count = len(content_children)
-    sub_total_steps += children_count
-    
-    if parentId and parentId != '0000000000000000':
-        folders_ids_stack.put(parentId)
-        parent_response = requests.get(
-            base_urls[source_region] + 'v2/content/folders/' + str(parentId), headers=headers, auth=auths[source_region])
-        parent_contents = json.loads(children_response.text)
-        folders_names_stack.put(parent_contents['name'])
-        folder_sub_total_steps += children_count
-    else:
-        folders_ids_stack.put('0000000000000000')
-        folders_names_stack.put('TOP')
-        folder_sub_count = 0
-        folder_sub_total_steps = 0
-    
+    sub_total_steps+=children_count 
+    updateProgress()
     if description:
         m = re.search('\((.*)\)', description)
         if m:
             description = m.group(1).strip()
-    parent_folder_name = folders_names_stack.get()
-    parent_folder_id = folders_ids_stack.get()
+
     if children_count==0:
-        sub_prefix = updateProgress(parent_folder_name, name, False)
         details = processItemPath(base_urls, source_region, id, headers,
                               auths, loggedin, dest_region, name, itemType, description)
         paths.append(details)
     else:
         for child in content_children:
             sub_count+=1
-            if parent_folder_name != 'TOP':
-                folder_sub_count += 1
             id = child['id']
             name = child['name']
             itemType = child['itemType']
@@ -149,25 +92,17 @@ def content_item_to_path(source_region, dest_region, base_urls, headers, auths, 
                 id = child['id']
                 paths = paths + content_item_to_path(source_region, dest_region, base_urls, headers, auths, id, loggedin)
 
-            updateProgress(parent_folder_name, name, True)
             details = processItemPath(base_urls, source_region, id, headers, auths, loggedin, dest_region, name, itemType, description)
             paths.append(details)
-   
     return paths
 
 
-def updateProgress(parent_name, name, has_sub_contents=False):
+def updateProgress(folder_path_display=None):
     global user_counter
     global global_folder_name
     global num_of_users_source
     global sub_count
-    global folders_ids_stack
     global sub_total_steps
-    global current_folder_name
-    global folder_sub_count
-    global folder_sub_total_steps
-    global folders_names_stack 
-
     sub_prefix = ''
     os.system('clear')
     print(
@@ -178,17 +113,10 @@ def updateProgress(parent_name, name, has_sub_contents=False):
     
     printProgressBar(user_counter, num_of_users_source,
                         prefix=global_prefix, suffix='Complete\n\n', length=150)
-
-    if not has_sub_contents:
-        print(sub_prefix +
-              f'{bcolors.FAIL} No contents found!{bcolors.ENDC}\n')
-    else:
-        printSubProgressBar(sub_count, max(1, sub_total_steps), prefix=sub_prefix + 'Progress',
-                            suffix='Complete\n\n', length=(150+len(global_prefix))-len(sub_prefix))
-
-        folder_sub_prefix = 'Folder (' + parent_name + ') '
-        printSubProgressBar(folder_sub_count, max(1, folder_sub_total_steps), prefix=folder_sub_prefix + 'Progress',
-                                suffix='Complete', length=(150+len(global_prefix))-len(folder_sub_prefix))
+    printProgressBar(sub_count, sub_total_steps,
+                        prefix=sub_prefix, suffix='Complete\n\n', length=166-len(sub_prefix))
+    if folder_path_display!=None:
+        print("Processing full path: {}".format(folder_path_display))
     return sub_prefix
 
 def processItemPath(base_urls, source_region, id, headers, auths, loggedin, dest_region, name, itemType, description):
@@ -213,6 +141,7 @@ def processItemPath(base_urls, source_region, id, headers, auths, loggedin, dest
 
     details = {'id': id, 'name': name, 'itemType': itemType,
                 'path': currentPath, 'email':  description, 'logged-in': loggedin, 'content-id-dest': dest_id}
+    updateProgress(folder_path_display=details['path'])
     return details
 
 def get_global_folders(region, base_urls, headers, auths):
@@ -238,11 +167,10 @@ def main():
     global user_counter
     global global_folder_name
     global num_of_users_source
-    global sub_count
-    global folders_ids_stack
     global current_folder_name
     global global_folder_id 
-    global folders_names_stack 
+    global sub_count
+    global sub_total_steps
 
     regions = ['SRC', 'DEST']
     missing_folders_withcontents = []
