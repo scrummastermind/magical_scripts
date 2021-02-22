@@ -1,19 +1,28 @@
-# Splunk Dashboards/Forms XML To CSV
+# Sumo Orgs' Contents Diff
 
-Traverse all Splunk's dir dashboards/forms xml files (in, current folder or nested folders level), and generate a CSV file of all individual panels with the following details:
+Traverse the contents (i.e. Dashboards, Lookups, Searches and Scheduled Searches) on a source Sumo Logic org, then deep compare 
 
-- Source File	
-- Dashboard Name	
-- Panel Type	
-- Panel Name	
-- Search Type	
-- Splunk Query	
-- Sumo Query
+- Whether the user in question ever logged in to the destination using the same e-mail
+- If they did, whether their source org's contents exist or missing under the same path on the destination.
+
+**Pre-requisites:** Admin level API's credentials AccessId/AccessKey to run this tool to use Admin Mode access to view all users' contents.
+
+## <u>Install</u>
+
+- Pull the repository, and change folder to `/SumoLogic` 
+- Optional: Create Python venv:
+  - Running `python3 -m venv sumovenv`
+  - `source sumovenv/bin/activate`
+- Run `pip install -r requirements.txt in`
+
+
 
 ## <u>Usage</u>
 
-- `python3 splunk_dash_form_xml_to_csv.py`
+- `python3 orgs_contents_diff.py`
+- Enter Source/Destination region of deployment 
+- Enter Source/Destination API's credentials such as AccessId/AccessKey
 
 ### <u>Process</u>
 
-The script generate and open a CSV report.
+The script will report on the overall and per user progress and then generate and open a CSV report.
