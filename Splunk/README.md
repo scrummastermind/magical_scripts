@@ -12,8 +12,10 @@ Traverse all Splunk's dir dashboards/forms xml files (in, current folder or nest
 
 ## <u>Usage</u>
 
-- `python3 splunk_dash_form_xml_to_csv.py`
+- `python3 orgs_contents_diff.py`
+- Enter Source/Destination region of deployment 
+- Enter Source/Destination API's credentials such as AccessId/AccessKey
 
 ### <u>Process</u>
 
-The script generate and open a CSV report.
+The script will report on the overall and per user progress and then generate and open a CSV report.
